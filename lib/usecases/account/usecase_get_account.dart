@@ -14,6 +14,11 @@ class GetAccountUseCase {
     return _userRepository.getAccount();
   }
 
+  /// Returns all accounts of the application.
+  Future<List<MooncakeAccount>> all() {
+    return _userRepository.getAccounts();
+  }
+
   /// Returns the [Stream] that emits all the [MooncakeAccount] objects
   /// as soon as they are stored.
   Stream<MooncakeAccount> stream() {

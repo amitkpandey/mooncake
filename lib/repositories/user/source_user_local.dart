@@ -22,6 +22,9 @@ abstract class LocalUserSource {
   /// If no [User] or [Wallet] have been saved yet, returns `null`.
   Future<MooncakeAccount> getAccount();
 
+  /// Returns a list of accounts currently stored locally
+  Future<List<MooncakeAccount>> getAccounts();
+
   /// Returns the [Stream] that emits all the new [User]
   /// once they have been saved.
   Stream<MooncakeAccount> get accountStream;

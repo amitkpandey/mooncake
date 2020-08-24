@@ -39,6 +39,19 @@ void main() {
     });
 
     test('saveWallet works properly with valid mnemonic', () async {
+      final account = MooncakeAccount(
+        moniker: null,
+        profilePicUri: null,
+        cosmosAccount: CosmosAccount(
+          address: "address",
+          accountNumber: 1,
+          sequence: 1,
+          coins: [],
+        ),
+      );
+
+      await source.saveAccount(account);
+
       final mnemonic = [
         "potato",
         "already",
@@ -67,12 +80,27 @@ void main() {
       ].join(" ");
       await source.saveWallet(mnemonic);
       verify(secureStorage.write(
-        key: LocalUserSourceImpl.MNEMONIC_KEY,
+        // wingman
+        // key: LocalUserSourceImpl.MNEMONIC_KEY,
+        key:
+            '${LocalUserSourceImpl.USER_DATA_KEY}.${LocalUserSourceImpl.MNEMONIC_KEY}.${account.address}',
         value: mnemonic,
       ));
     });
 
     test('getWallet works properly', () async {
+      final account = MooncakeAccount(
+        moniker: null,
+        profilePicUri: null,
+        cosmosAccount: CosmosAccount(
+          address: "address",
+          accountNumber: 1,
+          sequence: 1,
+          coins: [],
+        ),
+      );
+      await source.saveAccount(account);
+
       final mnemonic = [
         "potato",
         "already",
@@ -100,8 +128,10 @@ void main() {
         "pool",
       ].join(" ");
 
-      when(secureStorage.read(key: LocalUserSourceImpl.MNEMONIC_KEY))
-          .thenAnswer((_) => Future.value(mnemonic));
+      when(secureStorage.read(
+        key:
+            '${LocalUserSourceImpl.USER_DATA_KEY}.${LocalUserSourceImpl.MNEMONIC_KEY}.${account.address}',
+      )).thenAnswer((_) => Future.value(mnemonic));
 
       final wallet = await source.getWallet();
       expect(
@@ -129,12 +159,13 @@ void main() {
       final store = StoreRef.main();
       final record = await store.findFirst(
         database,
-        finder: Finder(filter: Filter.byKey(LocalUserSourceImpl.USER_DATA_KEY)),
+        finder: Finder(
+            filter:
+                Filter.byKey('${LocalUserSourceImpl.USER_DATA_KEY}.active')),
       );
-      final stored = MooncakeAccount.fromJson(
-        record.value as Map<String, dynamic>,
-      );
-      expect(stored, equals(account));
+
+      final stored = record.value;
+      expect(stored, equals(account.address));
     });
 
     test('getAccount returns the correctly stored data', () async {
@@ -150,9 +181,19 @@ void main() {
           sequence: 45,
         ),
       );
-
       final store = StoreRef.main();
-      await store.record(LocalUserSourceImpl.USER_DATA_KEY).put(
+      await store
+          .record(
+              '${LocalUserSourceImpl.USER_DATA_KEY}.${LocalUserSourceImpl.ACTIVE}')
+          .put(
+            database,
+            account.address,
+          );
+
+      await store
+          .record(
+              '${LocalUserSourceImpl.USER_DATA_KEY}.${LocalUserSourceImpl.ACCOUNTS}.${account.address}')
+          .put(
             database,
             account.toJson(),
           );
@@ -163,6 +204,42 @@ void main() {
 
     test('getAccount returns null when no data is saved', () async {
       expect(await source.getAccount(), isNull);
+    });
+
+    test('getAccounts returns empty array when no data is saved', () async {
+      expect(await source.getAccounts(), equals([]));
+    });
+
+    test('getAccounts returns the correctly stored data', () async {
+      final account = MooncakeAccount(
+        profilePicUri: "https://example.com/avatar.png",
+        moniker: "john-doe",
+        cosmosAccount: CosmosAccount(
+          accountNumber: 153,
+          address: "desmos1ew60ztvqxlf5kjjyyzxf7hummlwdadgesu3725",
+          coins: [
+            StdCoin(amount: "10000", denom: "udaric"),
+          ],
+          sequence: 45,
+        ),
+      );
+
+      final store = StoreRef.main();
+      await store
+          .record(
+              '${LocalUserSourceImpl.USER_DATA_KEY}.${LocalUserSourceImpl.ADDRESSES}')
+          .put(database, [account.address, 'anotherAddress']);
+
+      await store
+          .record(
+              '${LocalUserSourceImpl.USER_DATA_KEY}.${LocalUserSourceImpl.ACCOUNTS}.${account.address}')
+          .put(
+            database,
+            account.toJson(),
+          );
+
+      final stored = await source.getAccounts();
+      expect(stored, equals([account]));
     });
   });
 

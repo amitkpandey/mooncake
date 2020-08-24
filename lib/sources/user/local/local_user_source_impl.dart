@@ -30,6 +30,15 @@ class LocalUserSourceImpl extends LocalUserSource {
   static const USER_DATA_KEY = "user_data";
 
   @visibleForTesting
+  static const ACTIVE = "active";
+
+  @visibleForTesting
+  static const ACCOUNTS = "accounts";
+
+  @visibleForTesting
+  static const ADDRESSES = "addresses";
+
+  @visibleForTesting
   static const MNEMONIC_KEY = "mnemonic";
 
   final Database database;
@@ -62,18 +71,31 @@ class LocalUserSourceImpl extends LocalUserSource {
 
   @override
   Future<void> saveWallet(String mnemonic) async {
+    final activeAccountAddress =
+        await store.record('${USER_DATA_KEY}.${ACTIVE}').get(database);
     // Make sure the mnemonic is valid
     if (!bip39.validateMnemonic(mnemonic)) {
       throw Exception("Error while saving wallet: invalid mnemonic.");
     }
 
     // Save it safely
-    await _storage.write(key: MNEMONIC_KEY, value: mnemonic.trim());
+    await _storage.write(
+        key: '${USER_DATA_KEY}.${MNEMONIC_KEY}.${activeAccountAddress}',
+        value: mnemonic.trim());
   }
 
+  // returns mnemonic of current active account
   @override
-  Future<List<String>> getMnemonic() async {
-    final mnemonic = await _storage.read(key: MNEMONIC_KEY);
+  Future<List<String>> getMnemonic({String accountAddress}) async {
+    String activeAccountAddress = accountAddress;
+    if (activeAccountAddress == null) {
+      activeAccountAddress = await store
+          .record('${USER_DATA_KEY}.${ACTIVE}')
+          .get(database) as String;
+    }
+
+    final mnemonic = await _storage.read(
+        key: '${USER_DATA_KEY}.${MNEMONIC_KEY}.${activeAccountAddress}');
     if (mnemonic == null) {
       // The mnemonic does not exist, no wallet can be created.
       return null;
@@ -82,8 +104,8 @@ class LocalUserSourceImpl extends LocalUserSource {
   }
 
   @override
-  Future<Wallet> getWallet() async {
-    final mnemonic = await getMnemonic();
+  Future<Wallet> getWallet({String accountAddress}) async {
+    final mnemonic = await getMnemonic(accountAddress: accountAddress);
     if (mnemonic == null) return null;
 
     final walletInfo = _WalletInfo(
@@ -95,23 +117,38 @@ class LocalUserSourceImpl extends LocalUserSource {
   }
 
   @override
-  Future<MooncakeAccount> saveAccount(MooncakeAccount data) async {
+  Future<MooncakeAccount> saveAccount(MooncakeAccount data,
+      {bool makeActive = true}) async {
     await database.transaction((txn) async {
-      await store.record(USER_DATA_KEY).put(txn, data?.toJson());
+      var addresses = await store
+              .record('${USER_DATA_KEY}.${ADDRESSES}')
+              .get(database) as List ??
+          [];
+      addresses.add(data?.address);
+      addresses = addresses.toSet().toList();
+
+      // log it in to list of locally stored account addresses
+      await store
+          .record('${USER_DATA_KEY}.${ADDRESSES}')
+          .put(txn, data?.address);
+      if (makeActive) {
+        // makes this account active
+        await store
+            .record('${USER_DATA_KEY}.${ACTIVE}')
+            .put(txn, data?.address);
+      }
+      // saves account by address
+      await store
+          .record('${USER_DATA_KEY}.${ACCOUNTS}.${data?.address}')
+          .put(txn, data?.toJson());
     });
     return data;
   }
 
-  @override
-  Future<MooncakeAccount> getAccount() async {
-    // Try getting the user from the database
-    final record = await store.record(USER_DATA_KEY).get(database);
-    if (record != null) {
-      return MooncakeAccount.fromJson(record as Map<String, dynamic>);
-    }
-
+  Future<MooncakeAccount> _buildUserFromWalletHelper(
+      {String accountAddress}) async {
     // If the database does not have the user, build it from the address
-    final wallet = await getWallet();
+    final wallet = await getWallet(accountAddress: accountAddress);
     final address = wallet?.bech32Address;
 
     // If the address is null return null
@@ -124,6 +161,51 @@ class LocalUserSourceImpl extends LocalUserSource {
     await saveAccount(user);
 
     return user;
+  }
+
+  @override
+  Future<MooncakeAccount> getAccount() async {
+    // Try getting the user from the database
+    final activeAccountAddress =
+        await store.record('${USER_DATA_KEY}.${ACTIVE}').get(database);
+    dynamic record;
+    if (activeAccountAddress != null) {
+      record = await store
+          .record('${USER_DATA_KEY}.${ACCOUNTS}.${activeAccountAddress}')
+          .get(database);
+    }
+
+    if (record != null) {
+      return MooncakeAccount.fromJson(record as Map<String, dynamic>);
+    }
+    return _buildUserFromWalletHelper();
+  }
+
+  @override
+  Future<List<MooncakeAccount>> getAccounts() async {
+    // Try getting the user from the database
+    final addresses = await store
+            .record('${USER_DATA_KEY}.${ADDRESSES}')
+            .get(database) as List ??
+        [];
+
+    final List<MooncakeAccount> results = [];
+
+    await Future.wait(addresses.toSet().toList().map((x) async {
+      final record =
+          await store.record('${USER_DATA_KEY}.${ACCOUNTS}.${x}').get(database);
+      if (record != null) {
+        results.add(MooncakeAccount.fromJson(record as Map<String, dynamic>));
+      } else {
+        final tryToBuildFromWallet =
+            await _buildUserFromWalletHelper(accountAddress: x as String);
+
+        if (tryToBuildFromWallet is MooncakeAccount) {
+          results.add(tryToBuildFromWallet);
+        }
+      }
+    }));
+    return results;
   }
 
   @override

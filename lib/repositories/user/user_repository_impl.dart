@@ -70,6 +70,11 @@ class UserRepositoryImpl extends UserRepository {
   }
 
   @override
+  Future<List<MooncakeAccount>> getAccounts() {
+    return _localUserSource.getAccounts();
+  }
+
+  @override
   Future<MooncakeAccount> refreshAccount() {
     return updateAndStoreAccountData();
   }

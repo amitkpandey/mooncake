@@ -164,6 +164,31 @@ void main() {
     });
   });
 
+  group('getAccounts works properly', () {
+    test('when accounts does not exist locally', () async {
+      when(localUserSource.getAccounts()).thenAnswer((_) => Future.value([]));
+
+      final result = await repository.getAccounts();
+      expect(result, isEmpty);
+
+      verify(localUserSource.getAccounts()).called(1);
+    });
+
+    test('when accounts exists locally', () async {
+      final accountOne = MooncakeAccount.local("address");
+      final accountTwo = MooncakeAccount.local("address2");
+      final results = [accountOne, accountTwo];
+
+      when(localUserSource.getAccounts())
+          .thenAnswer((_) => Future.value(results));
+
+      final result = await repository.getAccounts();
+      expect(result, equals(results));
+
+      verify(localUserSource.getAccounts()).called(1);
+    });
+  });
+
   group('refreshAccount works properly', () {
     test('when account does not exist locally', () async {
       when(localUserSource.getAccount()).thenAnswer((_) => Future.value(null));
