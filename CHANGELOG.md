@@ -1,3 +1,8 @@
+# Version 0.5.0
+## Changes
+- Improved the reactions UX and UI
+
+
 # Version 0.4.3
 ## Changes
 - Improved how failed-to-sync posts are displayed
