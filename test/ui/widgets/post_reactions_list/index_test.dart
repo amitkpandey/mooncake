@@ -1,11 +1,13 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:mooncake/ui/ui.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
 import 'package:mooncake/entities/entities.dart';
+import 'package:mooncake/ui/ui.dart';
+
+import '../../../mocks/account.dart';
 import '../../../mocks/posts.dart';
 import '../../helper.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mockito/mockito.dart';
 
 void main() {
   testWidgets('PostReactionsList: Displays export correctly',
@@ -13,14 +15,7 @@ void main() {
     MooncakeAccount userAccount = MooncakeAccount(
       profilePicUri: "https://example.com/avatar.png",
       moniker: "john-doe",
-      cosmosAccount: CosmosAccount(
-        accountNumber: 153,
-        address: "desmos1ew60ztvqxlf5kjjyyzxf7hummlwdadgesu3725",
-        coins: [
-          StdCoin(amount: "10000", denom: "udaric"),
-        ],
-        sequence: 45,
-      ),
+      cosmosAccount: cosmosAccount,
     );
     List<Reaction> reactionTest = [
       Reaction(user: userAccount, value: 'laugh', code: "123"),
